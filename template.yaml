@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: port-aws-exporter
+    Description: Port AWS Exporter allows you to export your AWS resources to your Port's software catalog.
+    Author: Port
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: LICENSE
+    ReadmeUrl: README.md
+    Labels: ['devex','platformengineering','softwarecatalog','internaldeveloperportal']
+    HomePageUrl: https://getport.io
+    SourceCodeUrl: https://github.com/port-labs/port-aws-exporter
+
+Parameters:
+  CustomIAMPolicyARN:
+    Type: String
+    Description: Required IAM policy ARN to add to the default Lambda execution role. Should include the relevant permissions in order to list and read AWS resources that you want to export.
+  CustomPortCredentialsSecretARN:
+    Type: String
+    Description: Optional Secret ARN for Port credentials (client id and client secret). The secret value should looks like {"id":"<PORT_CLIENT_ID>","clientSecret":"<PORT_CLIENT_SECRET>"}.
+  SecretName:
+    Description: Required secret name for Port credentials, in case you don't provide your own (CustomPortCredentialsSecretARN).
+    Type: String
+    Default: "port-credentials"
+  CreateBucket:
+    Description: Required flag to control if to create a new bucket for the exporter configuration or use an existing one.
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+  BucketName:
+    Description: Required bucket name for the exporter configuration. Lambda also use it to write intermediate temporary files.
+    Type: String
+  ConfigJsonFileKey:
+    Description: Required exporter config json file key in the bucket.
+    Type: String
+    Default: "config.json"
+  FunctionName:
+    Description: Required function name for the exporter Lambda.
+    Type: String
+    Default: "port-aws-exporter"
+  ScheduleExpression:
+    Type: String
+    Description: Required schedule expression to define an event schedule for the exporter, according to following spec https://docs.aws.amazon.com/lambda/latest/dg/services-cloudwatchevents-expressions.html.
+    Default: rate(1 hour)
+  ScheduleState:
+    Type: String
+    Description: Required schedule state - "ENABLED" or "DISABLED". We recommend to enable it only after one successful run. Also make sure to update the schedule expression interval to be longer than the execution time.
+    Default: "DISABLED"
+    AllowedValues: ["ENABLED", "DISABLED"]
+
+Conditions:
+  CreateBucket: !Equals [!Ref CreateBucket, "true"]
+  CreateSecret: !Equals [!Ref CustomPortCredentialsSecretARN, '']
+  UseUserPortCredsSecret: !Not [Condition: CreateSecret]
+
+Globals:
+  Function:
+    Timeout: 900
+    MemorySize: 2048
+    Handler: app.lambda_handler
+    Runtime: python3.9
+    Layers:
+      - !Ref RequirementsLayer
+    Architectures:
+      - arm64
+    Environment:
+      Variables:
+        PORT_CREDS_SECRET_ARN: !If [UseUserPortCredsSecret, !Ref CustomPortCredentialsSecretARN, !Ref PortCredentialsSecret]
+        BUCKET_NAME: !Ref BucketName
+        CONFIG_JSON_FILE_KEY: !Ref ConfigJsonFileKey
+
+Resources:
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateBucket
+    Properties:
+      BucketName: !Ref BucketName
+
+  PortCredentialsSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: CreateSecret
+    Properties:
+      Name: !Ref SecretName
+
+  EventsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 3600 # 60 minutes
+      VisibilityTimeout: 900 # 15 minutes
+
+  EventBridgeToToSqsPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: SQS:SendMessage
+            Resource: !GetAtt EventsQueue.Arn
+      Queues:
+        - Ref: EventsQueue
+
+  RequirementsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      Description: Layer description
+      ContentUri: 'requirements_layer/'
+      CompatibleArchitectures:
+        - arm64
+      CompatibleRuntimes:
+        - python3.9
+    Metadata:
+      BuildMethod: python3.9
+      BuildArchitecture: arm64
+
+  LambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda_function/
+      FunctionName: !Ref FunctionName
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref BucketName
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !If [ UseUserPortCredsSecret, !Ref CustomPortCredentialsSecretARN, !Ref PortCredentialsSecret ]
+        - SQSPollerPolicy:
+            QueueName: !GetAtt EventsQueue.QueueName
+        - LambdaInvokePolicy:
+            FunctionName: !Ref FunctionName
+        - Statement:
+            - Action:
+                - cloudformation:ListResources
+                - cloudformation:GetResource
+              Resource: '*'
+              Effect: Allow
+        - Ref: CustomIAMPolicyARN
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref ScheduleExpression
+            Input: "{}"
+            State: !Ref ScheduleState
+
+  SQSToLambdaEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      EventSourceArn: !GetAtt EventsQueue.Arn
+      BatchSize: 10
+      Enabled: true
+      ScalingConfig:
+        MaximumConcurrency: 2
+
+Outputs:
+  ConfigBucketName:
+    Description: "Exporter Config Bucket Name"
+    Value: !Ref BucketName
+  LambdaFunctionARN:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt LambdaFunction.Arn
+  LambdaFunctionIamRoleARN:
+    Description: "Lambda function Execution IAM Role ARN"
+    Value: !GetAtt LambdaFunctionRole.Arn
+  PortCredentialsSecretARN:
+    Description: "Port Credentials Secret ARN"
+    Value: !If [UseUserPortCredsSecret, !Ref CustomPortCredentialsSecretARN, !Ref PortCredentialsSecret]
+  EventsQueueARN:
+    Description: "Events Queue ARN"
+    Value: !GetAtt EventsQueue.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EventsQueueARN"
