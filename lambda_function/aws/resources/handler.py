@@ -7,10 +7,12 @@ import jq
 
 import consts
 from aws.resources.resource_handler import ResourceHandler
+from aws.resources.cloudformation_handler import CloudFormationHandler
 from port.client import PortClient
 
 logger = logging.getLogger(__name__)
 
+SPECIAL_APIS = [{"AWS::CloudFormation::Stack": CloudFormationHandler, "default": ResourceHandler}]
 
 class ResourcesHandler:
     def __init__(self, config, lambda_context):
@@ -35,12 +37,15 @@ class ResourcesHandler:
         self.skip_delete = self.config.get('skip_delete', False)
         self.require_reinvoke = False
 
+
+
     def handle(self):
         if self.event and self.event.get('Records'):  # Single events from SQS
             logger.info("Handle events from sqs")
             for record in self.event.get('Records'):
                 try:
-                    self._handle_single_resource(json.loads(record["body"]))
+                    resource = json.loads(record["body"])
+                    self._handle_single_resource(resource)
                 except Exception as e:
                     logger.error(f"Failed to handle event: {self.event}, error: {e}")
             return
@@ -81,7 +86,10 @@ class ResourcesHandler:
 
     def _upsert_resources(self):
         for resource_index, resource in enumerate(list(self.resources_config)):
-            resource_handler = ResourceHandler(resource, self.port_client, self.lambda_context, self.region)
+            if resource['kind'] == "AWS::CloudFormation::Stack":
+                resource_handler = CloudFormationHandler(resource, self.port_client, self.lambda_context, self.region)
+            else:
+                resource_handler = ResourceHandler(resource, self.port_client, self.lambda_context, self.region)
             result = resource_handler.handle()
             self.aws_entities.update(result.get('aws_entities', set()))
             next_resource_config = result.get('next_resource_config')
