@@ -79,10 +79,15 @@ class ResourcesHandler:
                             if resource_config['kind'] == resource['resource_type']]
         assert resource_configs, f"Resource config not found for kind: {resource['resource_type']}"
 
-        aws_cloudcontrol_client = boto3.client('cloudcontrol', region_name=region)
         for resource_config in resource_configs:
-            resource_handler = ResourceHandler(resource_config, self.port_client, self.lambda_context, self.region)
-            resource_handler.handle_single_resource_item(aws_cloudcontrol_client, identifier, action_type)
+            if resource_config['kind'] == "AWS::CloudFormation::Stack":
+                aws_client = boto3.client("cloudformation", region_name=region)
+                resource_handler = CloudFormationHandler(resource_config, self.port_client, self.lambda_context,
+                                                         self.region)
+            else:
+                aws_client = boto3.client('cloudcontrol', region_name=region)
+                resource_handler = ResourceHandler(resource, self.port_client, self.lambda_context, self.region)
+            resource_handler.handle_single_resource_item(aws_client, identifier, action_type)
 
     def _upsert_resources(self):
         for resource_index, resource in enumerate(list(self.resources_config)):

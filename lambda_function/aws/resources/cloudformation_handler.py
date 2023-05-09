@@ -4,8 +4,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlencode
 import boto3
-import yaml
-import ruamel.yaml
 
 import consts
 from port.entities import create_entities_json
@@ -69,7 +67,7 @@ class CloudFormationHandler:
                 self.aws_entities.update(result.get('aws_entities', set()))
                 self.skip_delete = result.get('skip_delete', False) if not self.skip_delete else self.skip_delete
 
-    def handle_single_resource_item(self, aws_cloudformation_client, stack_name, region, action_type='upsert'):
+    def handle_single_resource_item(self, aws_cloudformation_client, stack_name, action_type='upsert'):
         entities = []
         skip_delete = False
         try:
