@@ -6,13 +6,11 @@ import boto3
 import jq
 
 import consts
-from aws.resources.resource_handler import ResourceHandler
-from aws.resources.cloudformation_handler import CloudFormationHandler
+from aws.resources.handler_creator import create_resource_handler
 from port.client import PortClient
 
 logger = logging.getLogger(__name__)
 
-SPECIAL_APIS = [{"AWS::CloudFormation::Stack": CloudFormationHandler, "default": ResourceHandler}]
 
 class ResourcesHandler:
     def __init__(self, config, lambda_context):
@@ -37,15 +35,13 @@ class ResourcesHandler:
         self.skip_delete = self.config.get('skip_delete', False)
         self.require_reinvoke = False
 
-
-
     def handle(self):
         if self.event and self.event.get('Records'):  # Single events from SQS
             logger.info("Handle events from sqs")
             for record in self.event.get('Records'):
                 try:
                     resource = json.loads(record["body"])
-                    self._handle_single_resource(resource)
+                    self._handle_event_resource(resource)
                 except Exception as e:
                     logger.error(f"Failed to handle event: {self.event}, error: {e}")
             return
@@ -66,7 +62,7 @@ class ResourcesHandler:
 
         logger.info("Done handling your resources")
 
-    def _handle_single_resource(self, resource):
+    def _handle_event_resource(self, resource):
         assert 'identifier' in resource, "Event must include 'identifier'"
         assert 'region' in resource, "Event must include 'region'"
         region = jq.first(resource['region'], resource)
@@ -80,21 +76,13 @@ class ResourcesHandler:
         assert resource_configs, f"Resource config not found for kind: {resource['resource_type']}"
 
         for resource_config in resource_configs:
-            if resource_config['kind'] == "AWS::CloudFormation::Stack":
-                aws_client = boto3.client("cloudformation", region_name=region)
-                resource_handler = CloudFormationHandler(resource_config, self.port_client, self.lambda_context,
-                                                         self.region)
-            else:
-                aws_client = boto3.client('cloudcontrol', region_name=region)
-                resource_handler = ResourceHandler(resource, self.port_client, self.lambda_context, self.region)
-            resource_handler.handle_single_resource_item(aws_client, identifier, action_type)
+            resource_handler = create_resource_handler(resource_config, self.port_client, self.lambda_context,
+                                                       region)
+            resource_handler.handle_single_resource_item(region, identifier, action_type)
 
     def _upsert_resources(self):
         for resource_index, resource in enumerate(list(self.resources_config)):
-            if resource['kind'] == "AWS::CloudFormation::Stack":
-                resource_handler = CloudFormationHandler(resource, self.port_client, self.lambda_context, self.region)
-            else:
-                resource_handler = ResourceHandler(resource, self.port_client, self.lambda_context, self.region)
+            resource_handler = create_resource_handler(resource, self.port_client, self.lambda_context, self.region)
             result = resource_handler.handle()
             self.aws_entities.update(result.get('aws_entities', set()))
             next_resource_config = result.get('next_resource_config')
