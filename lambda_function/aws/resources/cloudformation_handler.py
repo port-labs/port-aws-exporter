@@ -77,7 +77,7 @@ class CloudFormationHandler(BaseHandler):
                 # Handles unserializable date fields in the JSON
                 stack_obj = json.loads(json.dumps(stack_obj, default=str))
             elif action_type == 'delete':
-                stack_obj = {"identifier": stack_id.split['/'][1]}  # Entity identifier to delete
+                stack_obj = {"identifier": stack_id }  # Entity identifier to delete
 
             entities = create_entities_json(stack_obj, self.selector_query, self.mappings, action_type)
         except Exception as e:
