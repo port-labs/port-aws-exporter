@@ -8,6 +8,7 @@ from aws.resources.base_handler import BaseHandler
 import consts
 from port.entities import create_entities_json, handle_entities
 from botocore.exceptions import ValidationError
+import yaml
 
 
 logger = logging.getLogger(__name__)
@@ -64,15 +65,18 @@ class CloudFormationHandler(BaseHandler):
                 logger.info(f"Get CloudFormation Stack, id: {stack_id}")
 
                 aws_cloudformation_client = boto3.client("cloudformation", region_name=region)
-
                 stack_obj = aws_cloudformation_client.describe_stacks(StackName=stack_id).get("Stacks")[0]
+                # stack_obj = aws_cloudformation_client.describe_stacks(StackName=stack_id).get("Stacks")[0]
                 stack_obj['StackResources'] = aws_cloudformation_client.describe_stack_resources(StackName=stack_id)\
                     .get('StackResources')
                 stack_obj['Url'] = self._get_stack_console_url(stack_obj['StackId'])
 
-                stack_obj['TemplateBody'] = aws_cloudformation_client.get_template(StackName=stack_id,
-                                                                                   TemplateStage='Original')\
-                                                                     .get('TemplateBody')
+                # Get any SAM Template in YAML string
+                stack_obj['TemplateBody'] = yaml.dump(json.loads(json.dumps(aws_cloudformation_client.get_template(StackName=stack_id,
+                                                                                   TemplateStage='Original')
+                                                                     .get('TemplateBody'))))
+
+
 
                 # Handles unserializable date fields in the JSON
                 stack_obj = json.loads(json.dumps(stack_obj, default=str))
