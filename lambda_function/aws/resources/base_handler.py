@@ -31,7 +31,8 @@ class BaseHandler:
         raise NotImplementedError("Subclasses should implement 'handle' function")
 
     def handle_single_resource_item(self, region, resource_id, action_type='upsert'):
-        raise NotImplementedError("Subclasses should implement 'handle' function")
+        raise NotImplementedError("Subclasses should implement 'handle_single_resource_item' function")
+
     def _cleanup_regions(self, region):
         self.regions.remove(region)
         self.regions_config.pop(region, None)

@@ -66,7 +66,6 @@ class CloudFormationHandler(BaseHandler):
 
                 aws_cloudformation_client = boto3.client("cloudformation", region_name=region)
                 stack_obj = aws_cloudformation_client.describe_stacks(StackName=stack_id).get("Stacks")[0]
-                # stack_obj = aws_cloudformation_client.describe_stacks(StackName=stack_id).get("Stacks")[0]
                 stack_obj['StackResources'] = aws_cloudformation_client.describe_stack_resources(StackName=stack_id)\
                     .get('StackResources')
                 stack_obj['Url'] = self._get_stack_console_url(stack_obj['StackId'])
@@ -76,14 +75,14 @@ class CloudFormationHandler(BaseHandler):
                                                                                    TemplateStage='Original')
                                                                      .get('TemplateBody'))))
 
-
-
                 # Handles unserializable date fields in the JSON
                 stack_obj = json.loads(json.dumps(stack_obj, default=str))
+
             elif action_type == 'delete':
                 stack_obj = {"identifier": stack_id }  # Entity identifier to delete
 
             entities = create_entities_json(stack_obj, self.selector_query, self.mappings, action_type)
+
         except Exception as e:
             logger.error(f"Failed to extract or transform CloudFormation Stack with id: {stack_id}, error: {e}")
             skip_delete = True
@@ -110,7 +109,6 @@ class CloudFormationHandler(BaseHandler):
                 'skip_delete': self.skip_delete}
 
     def _get_stack_console_url(self, stack_id):
-        base_url = "https://console.aws.amazon.com/go/view?arn="
 
-        url = f"{base_url}{stack_id}"
+        url = f"{consts.AWS_CONSOLE_URL}{stack_id}"
         return url
