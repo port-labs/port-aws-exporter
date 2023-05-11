@@ -71,13 +71,12 @@ class ResourcesHandler:
         action_type = str(jq.first(resource.get('action', '"upsert"'), resource)).lower()
         assert action_type in ['upsert', 'delete'], f"Action should be one of 'upsert', 'delete'"
 
-        resource_configs = [resource_config for resource_config in self.resources_config
-                            if resource_config['kind'] == resource['resource_type']]
+        resource_configs = [resource_config for resource_config in self.resources_config if
+                            resource_config['kind'] == resource['resource_type']]
         assert resource_configs, f"Resource config not found for kind: {resource['resource_type']}"
 
         for resource_config in resource_configs:
-            resource_handler = create_resource_handler(resource_config, self.port_client, self.lambda_context,
-                                                       region)
+            resource_handler = create_resource_handler(resource_config, self.port_client, self.lambda_context, region)
             resource_handler.handle_single_resource_item(region, identifier, action_type)
 
     def _upsert_resources(self):
@@ -107,23 +106,18 @@ class ResourcesHandler:
         port_entities = self.port_client.search_entities(query)
 
         with ThreadPoolExecutor(max_workers=consts.MAX_DELETE_WORKERS) as executor:
-            executor.map(self.port_client.delete_entity,
-                         [entity for entity in port_entities
-                          if f"{entity.get('blueprint')};{entity.get('identifier')}" not in self.aws_entities])
+            executor.map(self.port_client.delete_entity, [entity for entity in port_entities if
+                                                          f"{entity.get('blueprint')};{entity.get('identifier')}" not in self.aws_entities])
 
     def _reinvoke_lambda(self):
         self._save_config_state()
         payload = {'next_config_file_key': self.next_config_file_key}
 
         aws_lambda_client = boto3.client('lambda')
-        return aws_lambda_client.invoke(
-            FunctionName=self.lambda_context.function_name,
-            InvocationType='Event',
-            Payload=json.dumps(payload),
-        )
+        return aws_lambda_client.invoke(FunctionName=self.lambda_context.function_name, InvocationType='Event',
+            Payload=json.dumps(payload), )
 
-        # self.__init__(self.config, self.lambda_context)
-        # return self.handle()
+        # self.__init__(self.config, self.lambda_context)  # return self.handle()
 
     def _save_config_state(self):
         aws_s3_client = boto3.client('s3')

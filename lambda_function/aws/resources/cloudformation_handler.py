@@ -1,15 +1,12 @@
-import copy
 import json
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urlencode
-import boto3
-from aws.resources.base_handler import BaseHandler
-import consts
-from port.entities import create_entities_json, handle_entities
-from botocore.exceptions import ValidationError
-import yaml
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import boto3
+import consts
+import yaml
+from aws.resources.base_handler import BaseHandler
+from port.entities import create_entities_json, handle_entities
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +45,8 @@ class CloudFormationHandler(BaseHandler):
     def _handle_list_response(self, list_response, region):
         stacks = list_response.get('StackSummaries', [])
         with ThreadPoolExecutor(max_workers=consts.MAX_UPSERT_WORKERS) as executor:
-            futures = [executor.submit(self.handle_single_resource_item,
-                                       region, stack.get("StackId")) for stack in stacks
-                                                                         if stack['StackStatus'] != 'DELETE_COMPLETE']
+            futures = [executor.submit(self.handle_single_resource_item, region, stack.get("StackId")) for stack in
+                       stacks if stack['StackStatus'] != 'DELETE_COMPLETE']
             for completed_future in as_completed(futures):
                 result = completed_future.result()
                 self.aws_entities.update(result.get('aws_entities', set()))
@@ -66,15 +62,14 @@ class CloudFormationHandler(BaseHandler):
 
                 aws_cloudformation_client = boto3.client("cloudformation", region_name=region)
                 stack_obj = aws_cloudformation_client.describe_stacks(StackName=stack_id).get("Stacks")[0]
-                stack_obj['StackResources'] = aws_cloudformation_client.describe_stack_resources(StackName=stack_id)\
-                    .get('StackResources')
+                stack_obj['StackResources'] = aws_cloudformation_client.describe_stack_resources(
+                    StackName=stack_id).get('StackResources')
                 stack_obj['Url'] = self._get_stack_console_url(stack_obj['StackId'])
-                template = aws_cloudformation_client.get_template(StackName=stack_id,
-                                                                  TemplateStage='Original')\
-                                                                  .get('TemplateBody')
+                template = aws_cloudformation_client.get_template(StackName=stack_id, TemplateStage='Original').get(
+                    'TemplateBody')
 
                 # If template is a SAM proccessed JSON, converts to yaml
-                if isinstance(template,dict) or isinstance(template,OrderedDict):
+                if isinstance(template, dict) or isinstance(template, OrderedDict):
                     template = yaml.dump(json.loads(json.dumps(template)))
 
                 stack_obj['TemplateBody'] = template
@@ -83,7 +78,7 @@ class CloudFormationHandler(BaseHandler):
                 stack_obj = json.loads(json.dumps(stack_obj, default=str))
 
             elif action_type == 'delete':
-                stack_obj = {"identifier": stack_id }  # Entity identifier to delete
+                stack_obj = {"identifier": stack_id}  # Entity identifier to delete
 
             entities = create_entities_json(stack_obj, self.selector_query, self.mappings, action_type)
 
