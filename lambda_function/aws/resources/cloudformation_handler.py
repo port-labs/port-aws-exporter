@@ -67,7 +67,6 @@ class CloudFormationHandler(BaseHandler):
                 stack_obj = aws_cloudformation_client.describe_stacks(StackName=stack_id).get("Stacks")[0]
                 stack_obj['StackResources'] = aws_cloudformation_client.describe_stack_resources(
                     StackName=stack_id).get('StackResources')
-                stack_obj['Url'] = self._get_stack_console_url(stack_obj['StackId'])
                 template = aws_cloudformation_client.get_template(StackName=stack_id).get(
                     'TemplateBody')
 
@@ -110,8 +109,3 @@ class CloudFormationHandler(BaseHandler):
 
         return {'aws_entities': self.aws_entities, 'next_resource_config': self.resource_config,
                 'skip_delete': self.skip_delete}
-
-    def _get_stack_console_url(self, stack_id):
-
-        url = f"{consts.AWS_CONSOLE_URL}{stack_id}"
-        return url

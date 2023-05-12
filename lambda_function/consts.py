@@ -1,5 +1,4 @@
 PORT_API_URL = 'https://api.getport.io/v1'
-AWS_CONSOLE_URL = 'https://console.aws.amazon.com/go/view?arn='
 PORT_AWS_EXPORTER_NAME = "port-aws-exporter"
 MAX_UPSERT_WORKERS = 2
 MAX_DELETE_WORKERS = 5
