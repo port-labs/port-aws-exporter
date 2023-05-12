@@ -2,6 +2,7 @@ import json
 import logging
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import boto3
 import consts
 import yaml
@@ -16,7 +17,8 @@ class CloudFormationHandler(BaseHandler):
         for region in list(self.regions):
             aws_cloudformation_client = boto3.client('cloudformation', region_name=region)
             stack_status_filter = self.regions_config.get(region, {}).get('stack_status_filter', [])
-            logger.info(f"List CloudFormation Stack, region: {region}, Stack statuses filter: {stack_status_filter}")
+            logger.info(f"List CloudFormation Stack, region: {region}, "
+                        f"Stack statuses filter: {stack_status_filter}")
             self.next_token = '' if self.next_token is None else self.next_token
             while self.next_token is not None:
                 list_stacks_params = {'StackStatusFilter': stack_status_filter}
@@ -26,7 +28,8 @@ class CloudFormationHandler(BaseHandler):
                     response = aws_cloudformation_client.list_stacks(**list_stacks_params)
                 except Exception as e:
                     logger.error(
-                        f"Failed list CloudFormation Stack, region: {region}, Stack statuses filter: {stack_status_filter}; {e}")
+                        f"Failed list CloudFormation Stack, region: {region},"
+                        f" Stack statuses filter: {stack_status_filter}; {e}")
                     self.skip_delete = True
                     self.next_token = None
                     break
@@ -65,16 +68,17 @@ class CloudFormationHandler(BaseHandler):
                 stack_obj['StackResources'] = aws_cloudformation_client.describe_stack_resources(
                     StackName=stack_id).get('StackResources')
                 stack_obj['Url'] = self._get_stack_console_url(stack_obj['StackId'])
-                template = aws_cloudformation_client.get_template(StackName=stack_id, TemplateStage='Original').get(
+                template = aws_cloudformation_client.get_template(StackName=stack_id).get(
                     'TemplateBody')
 
-                # If template is a SAM proccessed JSON, converts to yaml
-                if isinstance(template, dict) or isinstance(template, OrderedDict):
+                # Some templates return as nested OrderedDict, so we need to convert them
+                # to regular dicts using the json library and then to yaml strings for a clear yaml
+                if isinstance(template, OrderedDict):
                     template = yaml.dump(json.loads(json.dumps(template)))
 
                 stack_obj['TemplateBody'] = template
 
-                # Handles unserializable date fields in the JSON
+                # Handles unserializable date properties in the JSON by turning them into a string
                 stack_obj = json.loads(json.dumps(stack_obj, default=str))
 
             elif action_type == 'delete':
