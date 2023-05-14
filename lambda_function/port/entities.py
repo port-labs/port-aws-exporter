@@ -1,4 +1,26 @@
 import jq
+import logging
+
+logger = logging.getLogger(__name__)
+
+def handle_entities(entities, port_client, action_type='upsert'):
+    aws_entities = set()
+    for entity in entities:
+        blueprint_id = entity.get('blueprint')
+        entity_id = entity.get('identifier')
+
+        aws_entities.add(f"{blueprint_id};{entity_id}")
+
+        try:
+            if action_type == 'upsert':
+                port_client.upsert_entity(entity)
+            elif action_type == 'delete':
+                port_client.delete_entity(entity)
+        except Exception as e:
+            logger.error(
+                f"Failed to handle entity: {entity_id} of blueprint: {blueprint_id}, action: {action_type}; {e}")
+
+    return aws_entities
 
 
 def create_entities_json(resource_object, selector_jq_query, jq_mappings, action_type='upsert'):
