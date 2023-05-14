@@ -16,12 +16,10 @@ class CloudFormationHandler(BaseHandler):
     def handle(self):
         for region in list(self.regions):
             aws_cloudformation_client = boto3.client('cloudformation', region_name=region)
-            stack_status_filter = self.regions_config.get(region, {}).get('stack_status_filter', [])
-            logger.info(f"List CloudFormation Stack, region: {region}, "
-                        f"Stack statuses filter: {stack_status_filter}")
+            logger.info(f"List CloudFormation Stack, region: {region}")
             self.next_token = '' if self.next_token is None else self.next_token
             while self.next_token is not None:
-                list_stacks_params = {'StackStatusFilter': stack_status_filter}
+                list_stacks_params = self.selector_aws.get('list_parameters')
                 if self.next_token:
                     list_stacks_params['NextToken'] = self.next_token
                 try:
@@ -29,7 +27,7 @@ class CloudFormationHandler(BaseHandler):
                 except Exception as e:
                     logger.error(
                         f"Failed list CloudFormation Stack, region: {region},"
-                        f" Stack statuses filter: {stack_status_filter}; {e}")
+                        f" Parameters: {list_stacks_params}; {e}")
                     self.skip_delete = True
                     self.next_token = None
                     break
