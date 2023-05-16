@@ -19,7 +19,7 @@ class CloudFormationHandler(BaseHandler):
             logger.info(f"List CloudFormation Stack, region: {region}")
             self.next_token = '' if self.next_token is None else self.next_token
             while self.next_token is not None:
-                list_stacks_params = self.selector_aws.get('list_parameters')
+                list_stacks_params = self.selector_aws.get('list_parameters', {})
                 if self.next_token:
                     list_stacks_params['NextToken'] = self.next_token
                 try:
