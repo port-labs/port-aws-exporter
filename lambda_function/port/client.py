@@ -20,7 +20,7 @@ class PortClient:
     def upsert_entity(self, entity):
         blueprint_id = entity.pop('blueprint')
         logger.info(f"Upsert entity: {entity.get('identifier')} of blueprint: {blueprint_id}")
-        requests.post(f'{self.api_url}/blueprints/{urllib.parse.quote(blueprint_id)}/entities', json=entity,
+        requests.post(f'{self.api_url}/blueprints/{urllib.parse.quote(blueprint_id, safe='')}/entities', json=entity,
                       headers=self.headers,
                       params={'upsert': 'true', 'merge': 'true'}).raise_for_status()
 
@@ -28,7 +28,7 @@ class PortClient:
         blueprint_id = entity.pop('blueprint')
         entity_id = entity.pop('identifier')
         logger.info(f"Delete entity: {entity_id} of blueprint: {blueprint_id}")
-        requests.delete(f'{self.api_url}/blueprints/{urllib.parse.quote(blueprint_id)}/entities/{urllib.parse.quote(entity_id)}',
+        requests.delete(f'{self.api_url}/blueprints/{urllib.parse.quote(blueprint_id, safe='')}/entities/{urllib.parse.quote(entity_id, safe='')}',
                         headers=self.headers,
                         params={'delete_dependents': 'true'}).raise_for_status()
 
