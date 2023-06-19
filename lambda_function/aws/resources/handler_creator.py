@@ -3,8 +3,9 @@ from typing import Dict, Type
 from aws.resources.base_handler import BaseHandler
 from aws.resources.cloudcontrol_handler import CloudControlHandler
 from aws.resources.cloudformation_handler import CloudFormationHandler
+from aws.resources.elastic_cloud_compute_handler import EC2Handler
 
-SPECIAL_AWS_HANDLERS: Dict[str, Type[BaseHandler]] = {"AWS::CloudFormation::Stack": CloudFormationHandler}
+SPECIAL_AWS_HANDLERS: Dict[str, Type[BaseHandler]] = {"AWS::CloudFormation::Stack": CloudFormationHandler, "AWS::EC2::Instance": EC2Handler}
 
 
 def create_resource_handler(resource_config, port_client, lambda_context, default_region):
