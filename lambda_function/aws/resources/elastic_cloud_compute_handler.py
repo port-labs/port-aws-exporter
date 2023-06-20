@@ -24,6 +24,10 @@ class EC2Handler(BaseHandler):
                     list_instances_params['NextToken'] = self.next_token
                 try:
                     response = aws_ec2_client.instances.all()
+                    instance_list = list()
+                    for instance in response:
+                        instance_list.append({"id": instance.id})
+
                 except Exception as e:
                     logger.error(
                         f"Failed list EC2 Instance, region: {region},"
@@ -32,9 +36,9 @@ class EC2Handler(BaseHandler):
                     self.next_token = None
                     break
 
-                self._handle_list_response(response, region)
+                self._handle_list_response(instance_list, region)
 
-                self.next_token = response.get('NextToken')
+                #self.next_token = instance_list.get('NextToken')
                 if self.lambda_context.get_remaining_time_in_millis() < consts.REMAINING_TIME_TO_REINVOKE_THRESHOLD:
                     # Lambda timeout is too close, should return checkpoint for next run
                     return self._handle_close_to_timeout(region)
@@ -57,7 +61,7 @@ class EC2Handler(BaseHandler):
         try:
             instance_obj = {}
             if action_type == 'upsert':
-                logger.info(f"Get EC2 Instance, id: {instance_id}")
+                logger.info(f"Describe EC2 Instance with ID: {instance_id}")
 
                 aws_ec2_client = boto3.client("ec2", region_name=region)
                 instance_response = aws_ec2_client.describe_instances(InstanceIds=[instance_id])
