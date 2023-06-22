@@ -1,45 +1,44 @@
 import json
 import logging
-from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
 import consts
-import yaml
 from aws.resources.base_handler import BaseHandler
 from port.entities import create_entities_json, handle_entities
 
 logger = logging.getLogger(__name__)
 
 
-class CloudFormationHandler(BaseHandler):
+class EC2InstanceHandler(BaseHandler):
+    """
+    A class to handle the exporting of AWS EC2 instance to Port
+    """
+
     def handle(self):
         for region in list(self.regions):
-            aws_cloudformation_client = boto3.client(
-                "cloudformation", region_name=region
-            )
-            logger.info(f"List CloudFormation Stack, region: {region}")
+            aws_ec2_client = boto3.resource("ec2", region_name=region)
+            logger.info(f"List EC2 Instance, region: {region}")
             self.next_token = "" if self.next_token is None else self.next_token
             while self.next_token is not None:
-                list_stacks_params = self.selector_aws.get("list_parameters", {})
+                list_instances_params = self.selector_aws.get("list_parameters", {})
                 if self.next_token:
-                    list_stacks_params["NextToken"] = self.next_token
+                    list_instances_params["NextToken"] = self.next_token
                 try:
-                    response = aws_cloudformation_client.list_stacks(
-                        **list_stacks_params
-                    )
+                    instance_list = aws_ec2_client.instances.all()
+
                 except Exception as e:
                     logger.error(
-                        f"Failed list CloudFormation Stack, region: {region},"
-                        f" Parameters: {list_stacks_params}; {e}"
+                        f"Failed list EC2 Instance, region: {region},"
+                        f" Parameters: {list_instances_params}; {e}"
                     )
                     self.skip_delete = True
                     self.next_token = None
                     break
 
-                self._handle_list_response(response, region)
+                self._handle_list_response(instance_list, region)
+                self.next_token = None  ## Since the instances.all() returns all instances, there is no need to do pagination
 
-                self.next_token = response.get("NextToken")
                 if (
                     self.lambda_context.get_remaining_time_in_millis()
                     < consts.REMAINING_TIME_TO_REINVOKE_THRESHOLD
@@ -56,14 +55,10 @@ class CloudFormationHandler(BaseHandler):
         }
 
     def _handle_list_response(self, list_response, region):
-        stacks = list_response.get("StackSummaries", [])
         with ThreadPoolExecutor(max_workers=consts.MAX_UPSERT_WORKERS) as executor:
             futures = [
-                executor.submit(
-                    self.handle_single_resource_item, region, stack.get("StackId")
-                )
-                for stack in stacks
-                if stack["StackStatus"] != "DELETE_COMPLETE"
+                executor.submit(self.handle_single_resource_item, region, instance.id)
+                for instance in list_response
             ]
             for completed_future in as_completed(futures):
                 result = completed_future.result()
@@ -74,51 +69,37 @@ class CloudFormationHandler(BaseHandler):
                     else self.skip_delete
                 )
 
-    def handle_single_resource_item(self, region, stack_id, action_type="upsert"):
+    def handle_single_resource_item(self, region, instance_id, action_type="upsert"):
         entities = []
         skip_delete = False
         try:
-            stack_obj = {}
+            instance_obj = {}
             if action_type == "upsert":
-                logger.info(f"Get CloudFormation Stack, id: {stack_id}")
+                logger.info(f"Describe EC2 Instance with ID: {instance_id}")
 
-                aws_cloudformation_client = boto3.client(
-                    "cloudformation", region_name=region
+                aws_ec2_client = boto3.client("ec2", region_name=region)
+                instance_response = aws_ec2_client.describe_instances(
+                    InstanceIds=[instance_id]
                 )
-                stack_obj = aws_cloudformation_client.describe_stacks(
-                    StackName=stack_id
-                ).get("Stacks")[0]
-                stack_obj[
-                    "StackResources"
-                ] = aws_cloudformation_client.describe_stack_resources(
-                    StackName=stack_id
-                ).get(
-                    "StackResources"
-                )
-                template = aws_cloudformation_client.get_template(
-                    StackName=stack_id
-                ).get("TemplateBody")
-
-                # Some templates return as nested OrderedDict, so we need to convert them
-                # to regular dicts using the json library and then to yaml strings for a clear yaml
-                if isinstance(template, OrderedDict):
-                    template = yaml.dump(json.loads(json.dumps(template)))
-
-                stack_obj["TemplateBody"] = template
+                instance_obj = instance_response["Reservations"][0]["Instances"][0]
+                instance_obj[
+                    "Region"
+                ] = region  ## The instance object doesn't have region so we add it dynamically here
 
                 # Handles unserializable date properties in the JSON by turning them into a string
-                stack_obj = json.loads(json.dumps(stack_obj, default=str))
+                instance_obj = json.loads(json.dumps(instance_obj, default=str))
 
             elif action_type == "delete":
-                stack_obj = {"identifier": stack_id}  # Entity identifier to delete
-
+                instance_obj = {
+                    "identifier": instance_id
+                }  # Entity identifier to delete
             entities = create_entities_json(
-                stack_obj, self.selector_query, self.mappings, action_type
+                instance_obj, self.selector_query, self.mappings, action_type
             )
 
         except Exception as e:
             logger.error(
-                f"Failed to extract or transform CloudFormation Stack with id: {stack_id}, error: {e}"
+                f"Failed to extract or transform EC2 Instance with id: {instance_id}, error: {e}"
             )
             skip_delete = True
 
