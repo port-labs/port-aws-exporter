@@ -23,9 +23,7 @@ class BaseHandler:
         self.regions = self.selector_aws.get("regions", [default_region])
         self.regions_config = self.selector_aws.get("regions_config", {})
         self.next_token = self.selector_aws.get("next_token", "")
-        self.mappings = (
-            self.resource_config.get("port", {}).get("entity", {}).get("mappings", [])
-        )
+        self.mappings = (self.resource_config.get("port", {}).get("entity", {}).get("mappings", []))
         self.aws_entities = set()
         self.skip_delete = False
 
@@ -33,9 +31,7 @@ class BaseHandler:
         raise NotImplementedError("Subclasses should implement 'handle' function")
 
     def handle_single_resource_item(self, region, resource_id, action_type="upsert"):
-        raise NotImplementedError(
-            "Subclasses should implement 'handle_single_resource_item' function"
-        )
+        raise NotImplementedError("Subclasses should implement 'handle_single_resource_item' function")
 
     def _cleanup_regions(self, region):
         self.regions.remove(region)
