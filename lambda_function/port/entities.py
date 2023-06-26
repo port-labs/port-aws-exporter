@@ -1,5 +1,6 @@
-import jq
 import logging
+
+import jq
 
 logger = logging.getLogger(__name__)
 

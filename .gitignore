@@ -251,4 +251,4 @@ events/
 samconfig.toml
 packaged.yaml
 
-internal/
+dev/
