@@ -249,3 +249,5 @@ events/
 .aws-sam/
 samconfig.toml
 packaged.yaml
+
+dev/
