@@ -3,6 +3,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
+
 import consts
 from aws.resources.base_handler import BaseHandler
 from port.entities import create_entities_json, handle_entities
