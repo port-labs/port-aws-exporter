@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class LoadBalancerHandler(BaseHandler):
     def handle(self):
         for region in list(self.regions):
-            aws_elb_client = boto3.client("elbv2", region_name=region)
+            aws_elbv2_client = boto3.client("elbv2", region_name=region)
             logger.info(f"List Load Balancers, region: {region}")
             self.next_token = "" if self.next_token is None else self.next_token
             while self.next_token is not None:
@@ -21,7 +21,7 @@ class LoadBalancerHandler(BaseHandler):
                 if self.next_token:
                     list_stacks_params["NextToken"] = self.next_token
                 try:
-                    response = aws_elb_client.describe_load_balancers(**list_stacks_params)
+                    response = aws_elbv2_client.describe_load_balancers(**list_stacks_params)
                 except Exception as e:
                     logger.error(
                         f"Failed list Load Balancer, region: {region},"
@@ -44,30 +44,36 @@ class LoadBalancerHandler(BaseHandler):
     def _handle_list_response(self, list_response, region):
         load_balancers = list_response.get("LoadBalancers", [])
         with ThreadPoolExecutor(max_workers=consts.MAX_UPSERT_WORKERS) as executor:
-            futures = [executor.submit(self.handle_single_resource_item, region, load_balancer) for load_balancer in load_balancers]
+            futures = [executor.submit(self.handle_single_resource_item, region, load_balancer.get("LoadBalancerName")) for load_balancer in load_balancers]
             for completed_future in as_completed(futures):
                 result = completed_future.result()
                 self.aws_entities.update(result.get("aws_entities", set()))
                 self.skip_delete = result.get("skip_delete", False) if not self.skip_delete else self.skip_delete
 
-    def handle_single_resource_item(self, region, data, action_type="upsert"):
+    def handle_single_resource_item(self, region, elb_name, action_type="upsert"):
         entities = []
         skip_delete = False
         try:
-            elb_obj = data
             if action_type == "upsert":
-                logger.info(f"Get Load Balancer, Name: {elb_obj['LoadBalancerName']} in {region}")
+                logger.info(f"Get Load Balancer, Name: {elb_name} in {region}")
+
+                # Create a Boto3 client for the Elastic Load Balancing service
+                aws_elbv2_client = boto3.client('elbv2')
+                response = aws_elbv2_client.describe_load_balancers(Names=[elb_name])
+
+                # Extract load balancer details from the response
+                load_balancer_obj = response['LoadBalancers'][0]
 
                 # Handles unserializable date properties in the JSON by turning them into a string
-                elb_obj = json.loads(json.dumps(elb_obj, default=str))
+                load_balancer_obj = json.loads(json.dumps(load_balancer_obj, default=str))
 
             elif action_type == "delete":
-                elb_obj = {"identifier": elb_obj['LoadBalancerName']}  # Entity identifier to delete
+                load_balancer_obj = {"identifier": elb_name}  # Entity identifier to delete
 
-            entities = create_entities_json(elb_obj, self.selector_query, self.mappings, action_type)
+            entities = create_entities_json(load_balancer_obj, self.selector_query, self.mappings, action_type)
 
         except Exception as e:
-            logger.error(f"Failed to extract or transform Load Balancer with name: {elb_obj['LoadBalancerName']}, error: {e}")
+            logger.error(f"Failed to extract or transform Load Balancer with name: {elb_name}, error: {e}")
             skip_delete = True
 
         aws_entities = handle_entities(entities, self.port_client, action_type)
