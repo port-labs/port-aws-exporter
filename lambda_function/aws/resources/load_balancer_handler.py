@@ -17,22 +17,22 @@ class LoadBalancerHandler(BaseHandler):
             logger.info(f"List Load Balancers, region: {region}")
             self.next_token = "" if self.next_token is None else self.next_token
             while self.next_token is not None:
-                list_stacks_params = self.selector_aws.get("list_parameters", {})
+                filter_parameters = self.selector_aws.get("list_parameters", {})
                 if self.next_token:
-                    list_stacks_params["NextToken"] = self.next_token
+                    filter_parameters["Marker"] = self.next_token
                 try:
-                    response = aws_elbv2_client.describe_load_balancers(**list_stacks_params)
+                    response = aws_elbv2_client.describe_load_balancers(**filter_parameters)
                 except Exception as e:
                     logger.error(
-                        f"Failed list Load Balancer, region: {region},"
-                        f" Parameters: {list_stacks_params}; {e}")
+                        f"Failed list Load Balancers, region: {region},"
+                        f" Parameters: {filter_parameters}; {e}")
                     self.skip_delete = True
                     self.next_token = None
                     break
 
                 self._handle_list_response(response, region)
 
-                self.next_token = response.get("NextToken")
+                self.next_token = response.get("NextMarker")
                 if self.lambda_context.get_remaining_time_in_millis()< consts.REMAINING_TIME_TO_REINVOKE_THRESHOLD:
                     # Lambda timeout is too close, should return checkpoint for next run
                     return self._handle_close_to_timeout(region)
