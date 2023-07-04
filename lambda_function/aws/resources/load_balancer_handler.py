@@ -60,9 +60,21 @@ class LoadBalancerHandler(BaseHandler):
                 # Create a Boto3 client for the Elastic Load Balancing service
                 aws_elbv2_client = boto3.client('elbv2')
                 response = aws_elbv2_client.describe_load_balancers(Names=[elb_name])
-
                 # Extract load balancer details from the response
                 load_balancer_obj = response['LoadBalancers'][0]
+                load_balancer_arn = load_balancer_obj["LoadBalancerArn"]
+
+                ## Fetch the attributes attached to the load balancer
+                elb_attributes_response = aws_elbv2_client.describe_load_balancer_attributes(LoadBalancerArn=load_balancer_arn)
+                load_balancer_obj["Attributes"] = elb_attributes_response["Attributes"]
+
+                ## Fetch the listeners attatched to this load balancer
+                elb_listeners_response = aws_elbv2_client.describe_listeners(LoadBalancerArn=load_balancer_arn)
+                load_balancer_obj["Listeners"] = elb_listeners_response["Listeners"]
+
+                ## Fetch the tags attached to this load balancer
+                elb_tags_response = aws_elbv2_client.describe_tags(ResourceArns=[load_balancer_arn])
+                load_balancer_obj["Tags"] = elb_tags_response["TagDescriptions"][0]["Tags"]
 
                 # Handles unserializable date properties in the JSON by turning them into a string
                 load_balancer_obj = json.loads(json.dumps(load_balancer_obj, default=str))
