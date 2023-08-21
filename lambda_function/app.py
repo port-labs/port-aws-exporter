@@ -2,6 +2,7 @@ import logging
 
 from aws.resources.handler import ResourcesHandler
 from config import get_config
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 

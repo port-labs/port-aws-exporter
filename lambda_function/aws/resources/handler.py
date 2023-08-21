@@ -1,9 +1,10 @@
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
-import boto3
-import consts
 
+import boto3
+
+import consts
 import jq
 from aws.resources.handler_creator import create_resource_handler
 from port.client import PortClient
