@@ -18,11 +18,15 @@ class ResourcesHandler:
         self.lambda_context = lambda_context
         split_arn = lambda_context.invoked_function_arn.split(":")
         self.region = split_arn[3]
-        account_id = split_arn[4]
-        self.user_id = f"accountid/{account_id} region/{self.region}"
-        port_client_id = self.config.get("port_client_id") if self.config.get("keep_cred") else self.config.pop("port_client_id")
-        port_client_secret = self.config.get("port_client_secret") if self.config.get("keep_cred") else self.config.pop("port_client_secret")
-        self.port_client = PortClient(port_client_id, port_client_secret, user_agent=f"{consts.PORT_AWS_EXPORTER_NAME}/0.1 ({self.user_id})", api_url=self.config.get("port_api_url", consts.PORT_API_URL))
+        self.account_id = split_arn[4]
+        self.user_id = f"accountid/{self.account_id} region/{self.region}"
+        port_client_id = self.config.get("port_client_id") if self.config.get("keep_cred") else self.config.pop(
+            "port_client_id")
+        port_client_secret = self.config.get("port_client_secret") if self.config.get("keep_cred") else self.config.pop(
+            "port_client_secret")
+        self.port_client = PortClient(port_client_id, port_client_secret,
+                                      user_agent=f"{consts.PORT_AWS_EXPORTER_NAME}/0.1 ({self.user_id})",
+                                      api_url=self.config.get("port_api_url", consts.PORT_API_URL))
         self.event = self.config.get("event")
         self.bucket_name = self.config["bucket_name"]
         self.next_config_file_key = self.config.get("next_config_file_key")
@@ -30,6 +34,12 @@ class ResourcesHandler:
         self.resources_config = self.config["resources"]
         self.skip_delete = self.config.get("skip_delete", False)
         self.require_reinvoke = False
+
+    def upsert_integration(self):
+        integration_id = f"{self.region}:{self.account_id}"
+        integration = {"installationId": integration_id, "installationAppType": "AWS EXPORTER", "title": integration_id,
+                       "version": "0.1"}
+        self.port_client.upsert_integration(integration)
 
     def handle(self):
         if self.event and self.event.get("Records"):  # Single events from SQS
@@ -67,7 +77,8 @@ class ResourcesHandler:
         action_type = str(jq.first(resource.get("action", '"upsert"'), resource)).lower()
         assert action_type in ["upsert", "delete"], f"Action should be one of 'upsert', 'delete'"
 
-        resource_configs = [resource_config for resource_config in self.resources_config if resource_config["kind"] == resource["resource_type"]]
+        resource_configs = [resource_config for resource_config in self.resources_config if
+                            resource_config["kind"] == resource["resource_type"]]
         assert resource_configs, f"Resource config not found for kind: {resource['resource_type']}"
 
         for resource_config in resource_configs:
@@ -115,21 +126,25 @@ class ResourcesHandler:
 
         with ThreadPoolExecutor(max_workers=consts.MAX_DELETE_WORKERS) as executor:
             executor.map(self.port_client.delete_entity,
-                [entity for entity in port_entities if f"{entity.get('blueprint')};{entity.get('identifier')}" not in self.aws_entities])
+                         [entity for entity in port_entities if
+                          f"{entity.get('blueprint')};{entity.get('identifier')}" not in self.aws_entities])
 
     def _reinvoke_lambda(self):
         self._save_config_state()
         payload = {"next_config_file_key": self.next_config_file_key}
 
         aws_lambda_client = boto3.client("lambda")
-        return aws_lambda_client.invoke(FunctionName=self.lambda_context.function_name, InvocationType="Event", Payload=json.dumps(payload))
+        return aws_lambda_client.invoke(FunctionName=self.lambda_context.function_name, InvocationType="Event",
+                                        Payload=json.dumps(payload))
 
         # self.__init__(self.config, self.lambda_context)  # return self.handle()
 
     def _save_config_state(self):
         aws_s3_client = boto3.client("s3")
         try:
-            aws_s3_client.put_object(Body=json.dumps(self.config), Bucket=self.bucket_name, Key=self.next_config_file_key)
+            aws_s3_client.put_object(Body=json.dumps(self.config), Bucket=self.bucket_name,
+                                     Key=self.next_config_file_key)
         except Exception as e:
-            logger.warning(f"Failed to save lambda state, bucket: {self.bucket_name}, key: {self.next_config_file_key}; {e}")
+            logger.warning(
+                f"Failed to save lambda state, bucket: {self.bucket_name}, key: {self.next_config_file_key}; {e}")
             self.skip_delete = True

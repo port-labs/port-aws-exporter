@@ -57,3 +57,13 @@ class PortClient:
         )
         search_req.raise_for_status()
         return search_req.json()["entities"]
+
+    def upsert_integration(self, integration):
+        logger.info(
+            f"Upsert integration: {integration.get('installationId')}"
+        )
+        requests.post(f'{self.api_url}/integration',
+                      json=integration,
+                      headers=self.headers,
+                      params={"upsert": "true"},
+                      ).raise_for_status()
