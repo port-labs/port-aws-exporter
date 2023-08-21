@@ -1,9 +1,7 @@
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
-
 import boto3
-
 import consts
 import jq
 from aws.resources.handler_creator import create_resource_handler
@@ -35,13 +33,15 @@ class ResourcesHandler:
         self.skip_delete = self.config.get("skip_delete", False)
         self.require_reinvoke = False
 
-    def upsert_integration(self):
+    def _upsert_integration(self):
         integration_id = f"{self.region}:{self.account_id}"
         integration = {"installationId": integration_id, "installationAppType": "AWS EXPORTER", "title": integration_id,
                        "version": "0.1"}
         self.port_client.upsert_integration(integration)
 
     def handle(self):
+        self._upsert_integration()
+
         if self.event and self.event.get("Records"):  # Single events from SQS
             logger.info("Handle events from sqs")
             for record in self.event.get("Records"):
