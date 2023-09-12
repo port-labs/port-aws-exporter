@@ -32,7 +32,7 @@ class EC2InstanceHandler(BaseHandler):
         return {'aws_entities': self.aws_entities, 'next_resource_config': None, 'skip_delete': self.skip_delete}
 
     def _handle_list_response(self, list_response, region):
-        with ThreadPoolExecutor(max_workers=consts.MAX_UPSERT_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=consts.MAX_DEFAULT_AWS_WORKERS) as executor:
             futures = [executor.submit(self.handle_single_resource_item, region, instance.id) for instance in list_response]
 
             for completed_future in as_completed(futures):

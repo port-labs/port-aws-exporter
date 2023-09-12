@@ -43,7 +43,7 @@ class LoadBalancerHandler(BaseHandler):
 
     def _handle_list_response(self, list_response, region):
         load_balancers = list_response.get("LoadBalancers", [])
-        with ThreadPoolExecutor(max_workers=consts.MAX_UPSERT_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=consts.MAX_DEFAULT_AWS_WORKERS) as executor:
             futures = [executor.submit(self.handle_single_resource_item, region, load_balancer.get("LoadBalancerName")) for load_balancer in load_balancers]
             for completed_future in as_completed(futures):
                 result = completed_future.result()

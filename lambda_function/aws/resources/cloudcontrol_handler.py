@@ -50,7 +50,7 @@ class CloudControlHandler(BaseHandler):
 
     def _handle_list_response(self, list_response, region):
         resource_descriptions = list_response.get("ResourceDescriptions", [])
-        with ThreadPoolExecutor(max_workers=consts.MAX_UPSERT_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=consts.MAX_CC_WORKERS) as executor:
             futures = [executor.submit(self.handle_single_resource_item, region, resource_desc.get("Identifier", "")) for resource_desc in resource_descriptions]
             for completed_future in as_completed(futures):
                 result = completed_future.result()
