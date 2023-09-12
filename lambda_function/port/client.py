@@ -1,4 +1,3 @@
-import copy
 import logging
 import urllib.parse
 
@@ -25,8 +24,8 @@ class PortClient:
         return token_response.json()["accessToken"]
 
     def upsert_entity(self, entity):
-        entity_to_upsert = copy.deepcopy(entity)
-        blueprint_id = entity_to_upsert.pop("blueprint")
+        blueprint_id = entity.get("blueprint")
+        entity_to_upsert = {k: v for k, v in entity.items() if k != 'blueprint'}
         logger.info(
             f"Upsert entity: {entity_to_upsert.get('identifier')} of blueprint: {blueprint_id}"
         )
@@ -38,9 +37,8 @@ class PortClient:
         ).raise_for_status()
 
     def delete_entity(self, entity):
-        entity_to_delete = copy.deepcopy(entity)
-        blueprint_id = entity_to_delete.pop("blueprint")
-        entity_id = entity_to_delete.pop("identifier")
+        blueprint_id = entity.get("blueprint")
+        entity_id = entity.get("identifier")
         logger.info(f"Delete entity: {entity_id} of blueprint: {blueprint_id}")
         requests.delete(
             f'{self.api_url}/blueprints/{urllib.parse.quote(blueprint_id, safe="")}/entities/{urllib.parse.quote(entity_id, safe="")}',
