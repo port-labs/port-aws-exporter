@@ -126,7 +126,7 @@ class ResourcesHandler:
         }
         port_entities = self.port_client.search_entities(query)
 
-        with ThreadPoolExecutor(max_workers=consts.MAX_DELETE_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=consts.MAX_PORT_WORKERS) as executor:
             executor.map(self.port_client.delete_entity,
                          [entity for entity in port_entities if
                           f"{entity.get('blueprint')};{entity.get('identifier')}" not in self.aws_entities])

@@ -45,7 +45,7 @@ class CloudFormationHandler(BaseHandler):
 
     def _handle_list_response(self, list_response, region):
         stacks = list_response.get("StackSummaries", [])
-        with ThreadPoolExecutor(max_workers=consts.MAX_UPSERT_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=consts.MAX_DEFAULT_AWS_WORKERS) as executor:
             futures = [executor.submit(self.handle_single_resource_item, region, stack.get("StackId")) for stack in stacks if stack["StackStatus"] != "DELETE_COMPLETE"]
             for completed_future in as_completed(futures):
                 result = completed_future.result()
