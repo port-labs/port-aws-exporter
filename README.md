@@ -1,3 +1,7 @@
+[DEPRECATED]
+
+This is the old version of Port's AWS integration and is no longer maintained. Please refer to our [documentation](https://docs.port.io) to learn about the latest Port integration for AWS
+
 # Port AWS Exporter
 
 Port is the Developer Platform meant to supercharge your DevOps and Developers, and allow you to regain control of your environment.
